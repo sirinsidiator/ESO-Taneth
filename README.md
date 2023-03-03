@@ -5,7 +5,7 @@ SPDX-License-Identifier: Artistic-2.0
 -->
 
 Taneth is a test framework for Elder Scrolls Online addons, inspired by [Mocha](https://mochajs.org/) and [busted](https://lunarmodules.github.io/busted/).
-It can be used both inside the game and outside with the help of [ESOLua](https://github.com/sirinsidiator/ESOLua).
+It can be used both inside the game and outside with the help of [ESOLua](https://github.com/sirinsidiator/ESOLua). You can find the [latest release](https://www.esoui.com/downloads/info3584-Taneth-TestingFramwork.html) on ESOUI.
 
 Test suites follow the same structure as Mocha and busted, with the exception that they have to be wrapped into a call to Taneth. A simple test file could look like this:
 ```lua
@@ -33,7 +33,7 @@ Results for suite 'MySuite':
 ```
 
 To run tests inside the game you can use the `/taneth` slash command.
-Per default it will simply run all available test suites, but you can pass it the id (`MyTest` in the example above) to limit it to a specific test suite.
+Per default it will simply run all available test suites, but you can pass it the id (`MySuite` in the example above) to limit it to a specific test suite.
 
 When a test behaves differently outside the game than it does inside, please make sure to report it either here or on the ESOLua project if it's due to Lua itself. The ultimate goal is to have it mimic the game as closely as possible.
 
