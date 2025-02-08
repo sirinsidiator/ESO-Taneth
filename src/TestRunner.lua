@@ -57,7 +57,7 @@ local function PrintError(label, err)
     if IsExternal() then
         d(label)
         d(err)
-        d("")
+        d(" ")
     else
         d(label, err)
     end
@@ -123,7 +123,7 @@ local function ShowResult(runs)
             end
             strings[#strings + 1] = table.concat(stats.results, "")
             strings[#strings + 1] = string.format("%d successes / %d failures / %d errors : %.2f seconds", stats.successCount, stats.failureCount, stats.errorCount, stats.duration)
-            strings[#strings + 1] = ""
+            strings[#strings + 1] = " "
         end
     end
 

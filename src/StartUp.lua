@@ -13,5 +13,5 @@ end
 Taneth.IsExternal = IsExternal
 
 if IsExternal() then
-    d = print
+    RequestDebugPrintText = print
 end
