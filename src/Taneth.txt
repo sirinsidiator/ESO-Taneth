@@ -21,3 +21,4 @@ TestRunner.lua
 API.lua
 
 test/id64.lua
+test/bit.lua
