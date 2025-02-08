@@ -153,7 +153,7 @@ Taneth("eso", function()
             end
 
             local numBitsTests = {
-                { 0, 0x1FFFFFFFFFFFFF },
+                { 0, 0 },
                 { 1, 0x1 },
                 { 10, 0x3FF },
                 { 53, 0x1FFFFFFFFFFFFF },
