@@ -13,7 +13,7 @@ for i = 1, #arg do
         -- ignore unknown options
     else
         local pathOrId = arg[i]
-        if string.sub(pathOrId, -4) == ".txt" then
+        if string.sub(pathOrId, -4) == ".txt" or string.sub(pathOrId, -6) == ".addon" then
             pathOrId = string.gsub(pathOrId, "\\", "/")
             table.insert(addonPaths, pathOrId)
         else
