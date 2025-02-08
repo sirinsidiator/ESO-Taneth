@@ -10,6 +10,7 @@ local function CreateSuiteEnv()
     env.describe = internal.describe
     env.it = internal.it
     env.assert = internal.assert
+    env.skip = internal.skip
     env._G = env
     setmetatable(env, { __index = _G })
     return env
@@ -48,20 +49,44 @@ local function CreateTableFunction(func)
     })
 end
 
+local function PendingTestCallback()
+    internal.currentRun.currentTest.skipped = true
+    return internal.originalAssert(false, "Test pending")
+end
+
+internal.skip = PendingTestCallback
+
 internal.describe = CreateTableFunction(function(label, callback)
     PushSuite(label)
     setfenv(callback, internal.currentRun.suiteEnv)()
     PopSuite()
 end)
-internal.describe.skip = function() end
+internal.describe.skip = function(label, callback)
+    PushSuite(label)
+    local wasAutoSkip = internal.currentRun.autoSkip
+    internal.currentRun.autoSkip = true
+    setfenv(callback, internal.currentRun.suiteEnv)()
+    internal.currentRun.autoSkip = wasAutoSkip
+    PopSuite()
+end
 
 internal.it = CreateTableFunction(function(label, callback)
+    if internal.currentRun.autoSkip then
+        callback = PendingTestCallback
+    else
+        callback = callback or PendingTestCallback
+    end
     internal.currentRun.tests[#internal.currentRun.tests + 1] = {
         label = GenerateLabel(label),
         callback = setfenv(callback, CreateTestEnv())
     }
 end)
-internal.it.skip = function() end
+internal.it.skip = function(label, _callback)
+    internal.currentRun.tests[#internal.currentRun.tests + 1] = {
+        label = GenerateLabel(label),
+        callback = setfenv(PendingTestCallback, CreateTestEnv())
+    }
+end
 
 internal.it.async = CreateTableFunction(function(label, callback, timeout)
     internal.currentRun.tests[#internal.currentRun.tests + 1] = {
@@ -71,6 +96,7 @@ internal.it.async = CreateTableFunction(function(label, callback, timeout)
         timeout = timeout
     }
 end)
+internal.it.async.skip = internal.it.skip
 
 local function PrintError(label, err)
     if IsExternal() then
@@ -141,7 +167,8 @@ local function ShowResult(runs)
                 stats.results[#stats.results + 1] = "|r"
             end
             strings[#strings + 1] = table.concat(stats.results, "")
-            strings[#strings + 1] = string.format("%d successes / %d failures / %d errors : %.2f seconds", stats.successCount, stats.failureCount, stats.errorCount, stats.duration)
+            strings[#strings + 1] = string.format("%d successes / %d pending / %d failures / %d errors : %.2f seconds",
+                stats.successCount, stats.pendingCount, stats.failureCount, stats.errorCount, stats.duration)
             strings[#strings + 1] = " "
         end
     end
@@ -164,7 +191,10 @@ local function RunTest(test, stats)
         test.result = "+"
         stats.successCount = stats.successCount + 1
     else
-        if test.failure then
+        if test.skipped then
+            test.result = "-"
+            stats.pendingCount = stats.pendingCount + 1
+        elseif test.failure then
             test.result = "-"
             stats.failureCount = stats.failureCount + 1
         else
@@ -201,7 +231,10 @@ local function RunAsyncTest(test, stats, callback)
     end
 
     local function SetError(err)
-        if test.failure then
+        if test.skipped then
+            test.result = "-"
+            stats.pendingCount = stats.pendingCount + 1
+        elseif test.failure then
             test.result = "-"
             stats.failureCount = stats.failureCount + 1
         else
@@ -291,6 +324,7 @@ local function DoRunTestSuite(id, suite, callback)
 
     local stats = {
         successCount = 0,
+        pendingCount = 0,
         failureCount = 0,
         errorCount = 0,
         results = {},
