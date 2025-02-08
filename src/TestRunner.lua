@@ -11,23 +11,35 @@ local function CreateSuiteEnv()
     env.it = internal.it
     env.assert = internal.assert
     env._G = env
-    setmetatable(env, {__index = _G})
+    setmetatable(env, { __index = _G })
     return env
 end
 
 local function CreateTestEnv()
     local env = {}
     env._G = env
-    setmetatable(env, {__index = internal.currentRun.suiteEnv})
+    setmetatable(env, { __index = internal.currentRun.suiteEnv })
     return env
 end
 
-local function PushLabel(label)
-    internal.currentRun.labels[#internal.currentRun.labels + 1] = label
+local function PushSuite(label)
+    internal.currentRun.suite[#internal.currentRun.suite + 1] = {
+        label = label,
+        tests = {},
+    }
 end
 
-local function PopLabel()
-    internal.currentRun.labels[#internal.currentRun.labels] = nil
+local function PopSuite()
+    internal.currentRun.suite[#internal.currentRun.suite] = nil
+end
+
+local function GenerateLabel(label)
+    local labels = {}
+    for i = 1, #internal.currentRun.suite do
+        labels[#labels + 1] = internal.currentRun.suite[i].label
+    end
+    labels[#labels + 1] = label
+    return table.concat(labels, " / ")
 end
 
 local function CreateTableFunction(func)
@@ -37,21 +49,28 @@ local function CreateTableFunction(func)
 end
 
 internal.describe = CreateTableFunction(function(label, callback)
-    PushLabel(label)
+    PushSuite(label)
     setfenv(callback, internal.currentRun.suiteEnv)()
-    PopLabel()
+    PopSuite()
 end)
 internal.describe.skip = function() end
 
 internal.it = CreateTableFunction(function(label, callback)
-    PushLabel(label)
     internal.currentRun.tests[#internal.currentRun.tests + 1] = {
-        label = table.concat(internal.currentRun.labels, " / "),
+        label = GenerateLabel(label),
         callback = setfenv(callback, CreateTestEnv())
     }
-    PopLabel()
 end)
 internal.it.skip = function() end
+
+internal.it.async = CreateTableFunction(function(label, callback, timeout)
+    internal.currentRun.tests[#internal.currentRun.tests + 1] = {
+        label = GenerateLabel(label),
+        callback = setfenv(callback, CreateTestEnv()),
+        async = true,
+        timeout = timeout
+    }
+end)
 
 local function PrintError(label, err)
     if IsExternal() then
@@ -65,7 +84,7 @@ end
 
 local TANETH_RESULT_DIALOG = "Taneth_Result"
 local function GetResultDialog()
-    if(not ESO_Dialogs[TANETH_RESULT_DIALOG]) then
+    if not ESO_Dialogs[TANETH_RESULT_DIALOG] then
         ESO_Dialogs[TANETH_RESULT_DIALOG] = {
             canQueue = true,
             title = {
@@ -138,42 +157,108 @@ local function ShowResult(runs)
     end
 end
 
-local function RunTests()
-    local successCount = 0
-    local failureCount = 0
-    local errorCount = 0
-    local startTime = GetGameTimeMilliseconds()
+local function RunTest(test, stats)
+    local success, err = pcall(test.callback)
 
-    local results = {}
-    for i = 1, #internal.currentRun.tests do
-        local currentTest = internal.currentRun.tests[i]
-        internal.currentRun.currentTest = currentTest
-        local success, err = pcall(currentTest.callback)
-
-        if success then
-            currentTest.result = "+"
-            successCount = successCount + 1
+    if success then
+        test.result = "+"
+        stats.successCount = stats.successCount + 1
+    else
+        if test.failure then
+            test.result = "-"
+            stats.failureCount = stats.failureCount + 1
         else
-            if currentTest.failure then
-                currentTest.result = "-"
-                failureCount = failureCount + 1
-            else
-                currentTest.result = "*"
-                errorCount = errorCount + 1
-            end
-            PrintError(currentTest.label, err)
+            test.result = "*"
+            stats.errorCount = stats.errorCount + 1
         end
-        results[i] = currentTest.result
+        PrintError(test.label, err)
+    end
+    return test.result
+end
+
+local DEFAULT_TEST_TIMEOUT = 5000
+local function RunAsyncTest(test, stats, callback)
+    local finished = false
+
+    local function ClearTimeout()
+        EVENT_MANAGER:UnregisterForUpdate("TanethTest")
     end
 
-    local duration = (GetGameTimeMilliseconds() - startTime) / 1000
-    return {
-        successCount = successCount,
-        failureCount = failureCount,
-        errorCount = errorCount,
-        duration = duration,
-        results = results
-    }
+    local function FinishTest()
+        if finished then
+            print("Test already finished")
+            return
+        end
+        test.onAsyncError = nil
+        ClearTimeout()
+        callback(test.result)
+        finished = true
+    end
+
+    local function SetSuccess()
+        test.result = "+"
+        stats.successCount = stats.successCount + 1
+    end
+
+    local function SetError(err)
+        if test.failure then
+            test.result = "-"
+            stats.failureCount = stats.failureCount + 1
+        else
+            test.result = "*"
+            stats.errorCount = stats.errorCount + 1
+        end
+        PrintError(test.label, err)
+    end
+
+    test.assertAsync = function(condition, message)
+        if not condition then
+            SetError(message)
+            FinishTest()
+        end
+    end
+
+    EVENT_MANAGER:RegisterForUpdate("TanethTest", test.timeout or DEFAULT_TEST_TIMEOUT, function()
+        if finished then return end
+        SetError("Test timed out")
+        FinishTest()
+    end)
+
+    local success, err = pcall(test.callback, function(err)
+        if finished then return end
+        if err then
+            SetError(err)
+        else
+            SetSuccess()
+        end
+        FinishTest()
+    end)
+
+    if not success then
+        SetError(err)
+        FinishTest()
+    end
+end
+
+local function RunNextTest(stats, index, callback)
+    local currentTest = internal.currentRun.tests[index]
+    internal.currentRun.currentTest = currentTest
+
+    if not currentTest then
+        callback()
+        return false
+    end
+
+    if currentTest.async then
+        RunAsyncTest(currentTest, stats, function(result)
+            stats.results[index] = result
+            RunNextTest(stats, index + 1, callback)
+        end)
+        return true
+    else
+        stats.results[index] = RunTest(currentTest, stats)
+        return RunNextTest(stats, index + 1, callback)
+    end
 end
 
 local function RegisterTestSuite(self, id, callback)
@@ -183,7 +268,7 @@ local function RegisterTestSuite(self, id, callback)
 end
 internal.RegisterTestSuite = RegisterTestSuite
 
-local function DoRunTestSuite(id, suite)
+local function DoRunTestSuite(id, suite, callback)
     if not suite then
         return { id = id, error = "Test suite '" .. id .. "' not found" }
     end
@@ -195,7 +280,7 @@ local function DoRunTestSuite(id, suite)
     local env = CreateSuiteEnv()
     internal.currentRun = {
         suiteEnv = env,
-        labels = {},
+        suite = {},
         tests = {},
     }
     internal.describe(id, function()
@@ -203,31 +288,65 @@ local function DoRunTestSuite(id, suite)
             setfenv(suite[i], env)()
         end
     end)
-    local stats = RunTests()
-    stats.id = id
-    return stats
+
+    local stats = {
+        successCount = 0,
+        failureCount = 0,
+        errorCount = 0,
+        results = {},
+    }
+    local startTime = GetGameTimeMilliseconds()
+    local async = RunNextTest(stats, 1, function()
+        stats.id = id
+        stats.duration = (GetGameTimeMilliseconds() - startTime) / 1000
+        callback(stats)
+    end)
+    return async
 end
 
-local function RunTestSuite(self, id)
-    local runs = { DoRunTestSuite(id, internal.suites[id]) }
-    ShowResult(runs)
+local function RunNextSuite(suites, index, callback)
+    local id = suites[index]
+    if not id then
+        callback()
+        return
+    end
+
+    local async = DoRunTestSuite(id, internal.suites[id], function(stats)
+        suites[index] = stats
+        RunNextSuite(suites, index + 1, callback)
+    end)
+    return async
+end
+
+local function RunTestSuite(self, id, callback)
+    local runs = { id }
+    local async = RunNextSuite(runs, 1, function()
+        ShowResult(runs)
+        if callback then callback() end
+    end)
+    return async
 end
 internal.RunTestSuite = RunTestSuite
 
-local function RunTestSuites(self, ids)
-    local runs = {}
-    for id in pairs(ids) do
-        runs[#runs + 1] = DoRunTestSuite(id, internal.suites[id])
-    end
-    ShowResult(runs)
+local function RunTestSuites(self, ids, callback)
+    local async = RunNextSuite(ids, 1, function()
+        ShowResult(ids)
+        if callback then callback() end
+    end)
+    return async
 end
 internal.RunTestSuites = RunTestSuites
 
-local function RunAll(self)
+local function RunAll(self, callback)
     local runs = {}
     for id in pairs(internal.suites) do
-        runs[#runs + 1] = DoRunTestSuite(id, internal.suites[id])
+        runs[#runs + 1] = id
     end
-    ShowResult(runs)
+
+    local async = RunNextSuite(runs, 1, function()
+        ShowResult(runs)
+        if callback then callback() end
+    end)
+    return async
 end
 internal.RunAll = RunAll

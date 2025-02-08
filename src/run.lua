@@ -35,9 +35,18 @@ else
         print("Loaded addon manifest " .. addonPath .. ".")
     end
 
+    local hasAsyncTests = false
     if #suiteIds > 0 then
-        Taneth:RunTestSuites(suiteIds)
+        hasAsyncTests = Taneth:RunTestSuites(suiteIds, function()
+            eso.ClearAllEventsAndUpdates()
+        end)
     else
-        Taneth:RunAll()
+        hasAsyncTests = Taneth:RunAll(function()
+            eso.ClearAllEventsAndUpdates()
+        end)
+    end
+
+    if hasAsyncTests then
+        eso.HandleNextFrame()
     end
 end

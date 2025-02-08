@@ -6,7 +6,11 @@ local internal = Taneth
 local IsExternal = internal.IsExternal
 
 local function Fail(result, message)
+    if not internal.currentRun.currentTest then return end
     internal.currentRun.currentTest.failure = not result
+    if internal.currentRun.currentTest.assertAsync then
+        return internal.currentRun.currentTest.assertAsync(result, message)
+    end
     return internal.originalAssert(result, message)
 end
 
@@ -42,7 +46,8 @@ internal.assert = setmetatable({
                     err = err:sub(1, index - 1)
                 end
             end
-            return Fail(err:find(expectedError, -expectedError:len(), 1, true) ~= nil, "Expected error: '" .. expectedError .. "' but got '" .. err .. "' instead")
+            return Fail(err:find(expectedError, -expectedError:len(), 1, true) ~= nil,
+                "Expected error: '" .. expectedError .. "' but got '" .. err .. "' instead")
         end
     end,
     fail = function(message)
