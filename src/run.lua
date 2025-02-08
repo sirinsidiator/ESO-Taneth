@@ -9,6 +9,8 @@ local suiteIds = {}
 for i = 1, #arg do
     if arg[i] == "--help" or arg[i] == "-h" then
         help = true
+    elseif string.sub(arg[i], 1, 1) == "-" then
+        -- ignore unknown options
     else
         local pathOrId = arg[i]
         if string.sub(pathOrId, -4) == ".txt" then
