@@ -14,9 +14,60 @@ local function Fail(result, message)
     return internal.originalAssert(result, message)
 end
 
+local function DeepCompare(t1, t2)
+    if type(t1) ~= type(t2) then
+        return false
+    end
+    if type(t1) ~= "table" then
+        return t1 == t2
+    end
+
+    for k, v in pairs(t1) do
+        if not DeepCompare(v, t2[k]) then
+            return false
+        end
+    end
+    for k, v in pairs(t2) do
+        if not DeepCompare(v, t1[k]) then
+            return false
+        end
+    end
+    return true
+end
+
+local function DeepToString(t, visited)
+    if type(t) ~= "table" then return tostring(t) end
+
+    if not visited then visited = {} end
+    if type(t) == "table" and visited[t] then return "{...}" end
+    visited[t] = true
+
+    local parts = {}
+    local size = #t
+    if size > 0 then
+        for i = 1, size do
+            parts[i] = DeepToString(t[i], visited)
+        end
+    end
+
+    for k, v in pairs(t) do
+        if type(k) ~= "number" or k > size then
+            if type(k) == "string" then
+                parts[#parts + 1] = k .. " = " .. DeepToString(v, visited)
+            else
+                parts[#parts + 1] = "[" .. tostring(k) .. "] = " .. DeepToString(v, visited)
+            end
+        end
+    end
+    return "{ " .. table.concat(parts, ", ") .. " }"
+end
+
 internal.assert = setmetatable({
     equals = function(a, b)
         return Fail(a == b, "expected: " .. tostring(a) .. ", actual: " .. tostring(b))
+    end,
+    same = function(a, b)
+        return Fail(DeepCompare(a, b), "expected: " .. DeepToString(a) .. ", actual: " .. DeepToString(b))
     end,
     is_true = function(a)
         return Fail(a == true, "expected: true, actual: " .. tostring(a))
@@ -48,6 +99,18 @@ internal.assert = setmetatable({
             end
             return Fail(err:find(expectedError, -expectedError:len(), 1, true) ~= nil,
                 "Expected error: '" .. expectedError .. "' but got '" .. err .. "' instead")
+        end
+    end,
+    has_no_error = function(callback)
+        local success, err = pcall(callback)
+        if not success then
+            if not IsExternal() then
+                local index = err:find("\nstack traceback")
+                if index then
+                    err = err:sub(1, index - 1)
+                end
+            end
+            return Fail(false, "Expected no error but got '" .. err .. "' instead")
         end
     end,
     fail = function(message)
