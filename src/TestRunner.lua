@@ -302,14 +302,6 @@ end
 internal.RegisterTestSuite = RegisterTestSuite
 
 local function DoRunTestSuite(id, suite, callback)
-    if not suite then
-        return { id = id, error = "Test suite '" .. id .. "' not found" }
-    end
-
-    if #suite == 0 then
-        return { id = id, error = "Test suite '" .. id .. "' is empty" }
-    end
-
     local env = CreateSuiteEnv()
     internal.currentRun = {
         suiteEnv = env,
@@ -345,7 +337,20 @@ local function RunNextSuite(suites, index, callback)
         return
     end
 
-    local async = DoRunTestSuite(id, internal.suites[id], function(stats)
+    local suite = internal.suites[id]
+    if not suite then
+        suites[index] = { id = id, error = "Test suite '" .. id .. "' not found" }
+        callback()
+        return
+    end
+
+    if #suite == 0 then
+        suites[index] = { id = id, error = "Test suite '" .. id .. "' is empty" }
+        callback()
+        return
+    end
+
+    local async = DoRunTestSuite(id, suite, function(stats)
         suites[index] = stats
         RunNextSuite(suites, index + 1, callback)
     end)
