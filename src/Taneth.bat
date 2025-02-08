@@ -12,4 +12,4 @@ IF NOT "%ESOUI_HOME%"=="" (
     SET ESOLUA_ARGS=%ESOLUA_ARGS% -s %ESOUI_HOME%
 )
 
-esolua %ESOLUA_ARGS% -- run.lua %*
+esolua %ESOLUA_ARGS% -- %~dp0run.lua %*

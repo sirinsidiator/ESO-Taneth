@@ -19,7 +19,8 @@ end
 if help then
     print("Usage: Taneth.bat [--help|-h] [--verbose|-v] <relative path to addon manifest> [<test suite id>]")
 else
-    eso.LoadAddon("Taneth.txt")
+    local TANETH_FOLDER = string.sub(arg[0], 1, #arg[0] - 7)
+    eso.LoadAddon(TANETH_FOLDER .. "Taneth.txt")
 
     if addonPath then
         if not eso.LoadAddon(addonPath) then
