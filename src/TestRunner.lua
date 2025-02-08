@@ -214,6 +214,15 @@ local function RunTestSuite(self, id)
 end
 internal.RunTestSuite = RunTestSuite
 
+local function RunTestSuites(self, ids)
+    local runs = {}
+    for id in pairs(ids) do
+        runs[#runs + 1] = DoRunTestSuite(id, internal.suites[id])
+    end
+    ShowResult(runs)
+end
+internal.RunTestSuites = RunTestSuites
+
 local function RunAll(self)
     local runs = {}
     for id in pairs(internal.suites) do

@@ -9,6 +9,7 @@ Taneth = setmetatable({
     IsExternal = IsExternal,
     RegisterTestSuite = internal.RegisterTestSuite,
     RunTestSuite = internal.RunTestSuite,
+    RunTestSuites = internal.RunTestSuites,
     RunAll = internal.RunAll
 }, {
     __call = internal.RegisterTestSuite
