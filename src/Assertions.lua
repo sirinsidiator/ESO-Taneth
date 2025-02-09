@@ -102,8 +102,10 @@ internal.assert = setmetatable({
         end
     end,
     has_no_error = function(callback)
-        local success, err = pcall(callback)
+        local returns = { pcall(callback) }
+        local success = table.remove(returns, 1)
         if not success then
+            local err = returns[1]
             if not IsExternal() then
                 local index = err:find("\nstack traceback")
                 if index then
@@ -112,6 +114,7 @@ internal.assert = setmetatable({
             end
             return Fail(false, "Expected no error but got '" .. err .. "' instead")
         end
+        return unpack(returns)
     end,
     fail = function(message)
         Fail(false, message)
