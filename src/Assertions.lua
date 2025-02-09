@@ -91,7 +91,9 @@ internal.assert = setmetatable({
         if success or not err then
             return Fail(false, "Expected error: '" .. expectedError .. "' but no error was thrown")
         else
-            if not IsExternal() then
+            if IsExternal() then
+                err = err:gsub("^.-%.lua:%d+: ", "")
+            else
                 local index = err:find("\nstack traceback")
                 if index then
                     err = err:sub(1, index - 1)
