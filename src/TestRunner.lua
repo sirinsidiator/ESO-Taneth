@@ -340,14 +340,12 @@ local function RunNextSuite(suites, index, callback)
     local suite = internal.suites[id]
     if not suite then
         suites[index] = { id = id, error = "Test suite '" .. id .. "' not found" }
-        callback()
-        return
+        return RunNextSuite(suites, index + 1, callback)
     end
 
     if #suite == 0 then
         suites[index] = { id = id, error = "Test suite '" .. id .. "' is empty" }
-        callback()
-        return
+        return RunNextSuite(suites, index + 1, callback)
     end
 
     local async = DoRunTestSuite(id, suite, function(stats)
